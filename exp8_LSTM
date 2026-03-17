@@ -1,0 +1,125 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import random
+import string
+from collections import Counter
+
+text = """Shall I compare thee to a summer day
+Thou art more lovely and more temperate
+Rough winds do shake the darling buds of May
+And summer lease hath all too short a date"""
+
+text = text.lower()
+text = ''.join([ch for ch in text if ch not in string.punctuation])
+words = text.split()
+
+word_count = Counter(words)
+vocab = list(word_count.keys())
+
+word_to_idx = {word:i for i,word in enumerate(vocab)}
+idx_to_word = {i:word for word,i in word_to_idx.items()}
+
+vocab_size = len(vocab)
+
+seq_length = 5
+hidden_size = 128
+embedding_dim = 64
+num_layers = 2
+learning_rate = 0.01
+epochs = 50
+
+def create_dataset(words, seq_length):
+    X, Y = [], []
+    for i in range(len(words) - seq_length):
+        seq = words[i:i+seq_length]
+        target = words[i+1:i+seq_length+1]
+        
+        X.append([word_to_idx[w] for w in seq])
+        Y.append([word_to_idx[w] for w in target])
+        
+    return torch.tensor(X), torch.tensor(Y)
+
+X, Y = create_dataset(words, seq_length)
+
+class GRUModel(nn.Module):
+    def __init__(self):
+        super(GRUModel, self).__init__()
+        
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        
+        self.gru = nn.GRU(
+            embedding_dim,
+            hidden_size,
+            num_layers,
+            batch_first=True,
+            dropout=0.3
+        )
+        
+        self.fc = nn.Linear(hidden_size, vocab_size)
+    
+    def forward(self, x, hidden):
+        x = self.embedding(x)
+        out, hidden = self.gru(x, hidden)
+        out = self.fc(out)
+        return out, hidden
+    
+    def init_hidden(self, batch_size):
+        return torch.zeros(num_layers, batch_size, hidden_size)
+
+model = GRUModel()
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+print("Training started...")
+
+for epoch in range(epochs):
+    
+    hidden = model.init_hidden(X.size(0))
+    
+    optimizer.zero_grad()
+    
+    output, hidden = model(X, hidden)
+    
+    loss = criterion(output.view(-1, vocab_size), Y.view(-1))
+    
+    loss.backward()
+    optimizer.step()
+    
+    if (epoch+1) % 10 == 0:
+        print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+
+print("Training Completed")
+
+def generate_text(start_word, length=10):
+    
+    model.eval()
+    
+    words_list = start_word.split()
+    input_seq = torch.tensor([[word_to_idx[w] for w in words_list]])
+    
+    hidden = model.init_hidden(1)
+    
+    result = start_word
+    
+    for _ in range(length):
+        
+        output, hidden = model(input_seq, hidden)
+        
+        prob = torch.softmax(output[0, -1], dim=0)
+        
+        next_word_idx = torch.multinomial(prob, 1).item()
+        
+        next_word = idx_to_word[next_word_idx]
+        
+        result += " " + next_word
+        
+        input_seq = torch.tensor([[next_word_idx]])
+    
+    return result
+
+start = "shall i"
+print("\nGenerated Text:")
+print(generate_text(start, 10))
+
