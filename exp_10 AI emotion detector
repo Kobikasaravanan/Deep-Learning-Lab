@@ -1,0 +1,111 @@
+# ==========================================
+# 😊 AI EMOTION DETECTOR - MAIN APPLICATION
+# ==========================================
+
+# ==========================================
+# 📌 1. IMPORT LIBRARIES
+# ==========================================
+import tensorflow as tf
+from tensorflow.keras import layers, models
+import numpy as np
+from PIL import Image
+import gradio as gr
+
+
+# ==========================================
+# 📌 2. BUILD CNN MODEL
+# ==========================================
+model = models.Sequential([
+    layers.Conv2D(32, (3,3), activation='relu', input_shape=(48,48,1)),
+    layers.MaxPooling2D(2,2),
+
+    layers.Conv2D(64, (3,3), activation='relu'),
+    layers.MaxPooling2D(2,2),
+
+    layers.Flatten(),
+    layers.Dense(128, activation='relu'),
+    layers.Dense(7, activation='softmax')
+])
+
+# Compile the model
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+
+# ==========================================
+# 📌 3. TRAIN MODEL (DEMO PURPOSE)
+# ==========================================
+# NOTE: Replace with real dataset (FER2013) for better accuracy
+X_train = np.random.rand(500,48,48,1)
+y_train = np.random.randint(0,7,500)
+
+model.fit(X_train, y_train, epochs=3)
+
+
+# ==========================================
+# 📌 4. DEFINE EMOTION LABELS
+# ==========================================
+emotions = ['Angry','Disgust','Fear','Happy','Sad','Surprise','Neutral']
+
+
+# ==========================================
+# 📌 5. PREDICTION FUNCTION
+# ==========================================
+def predict_emotion(image):
+    # Convert to grayscale
+    image_gray = image.convert('L')
+
+    # Resize image
+    image_gray = image_gray.resize((48,48))
+
+    # Normalize
+    img_array = np.array(image_gray) / 255.0
+    img_array = img_array.reshape(1,48,48,1)
+
+    # Detect emoji/cartoon images
+    if np.var(img_array) < 0.01:
+        return "⚠️ Emoji/Cartoon detected - Use real face image"
+
+    # Predict emotion
+    prediction = model.predict(img_array)[0]
+    return emotions[np.argmax(prediction)]
+
+
+# ==========================================
+# 📌 6. CREATE COLORFUL UI (GRADIO)
+# ==========================================
+with gr.Blocks(
+    theme=gr.themes.Gradient(),
+    css="""
+    body {
+        background: linear-gradient(to right, #ff9a9e, #fad0c4);
+    }
+    .gr-button {
+        background-color: #ff4b5c !important;
+        color: white !important;
+        border-radius: 10px;
+        font-size: 16px;
+    }
+    """
+) as app:
+
+    gr.Markdown("<h1 style='text-align:center;'>😊 AI Emotion Detector</h1>")
+    gr.Markdown("<h3 style='text-align:center;'>Upload a face image to detect emotion</h3>")
+
+    with gr.Row():
+        image_input = gr.Image(type="pil", label="📤 Upload Image")
+        output = gr.Textbox(label="🎯 Predicted Emotion")
+
+    btn = gr.Button("🚀 Detect Emotion")
+    btn.click(fn=predict_emotion, inputs=image_input, outputs=output)
+
+    gr.Markdown("<p style='text-align:center;'>Deep Learning based Emotion Detection System</p>")
+
+
+# ==========================================
+# 📌 7. RUN APPLICATION
+# ==========================================
+app.launch()
